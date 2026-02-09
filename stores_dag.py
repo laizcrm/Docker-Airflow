@@ -71,7 +71,7 @@ def show_columns_and_date():
 
 def generate_graphs():
     """Run analysis script"""
-    exec(open('/opt/airflow/script/analise_vendas.py').read())
+    exec(open('/opt/airflow/script/analysis_sales.py').read())
 
 
 ##########################################################################################
