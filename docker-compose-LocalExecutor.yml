@@ -54,6 +54,9 @@ services:
             - AIRFLOW__CORE__LOAD_EXAMPLES=False
             - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
             - AIRFLOW__WEBSERVER__RBAC=True
+            - AIRFLOW__WEBSERVER__SECRET_KEY=mysecretkey123
+            - _PIP_ADDITIONAL_REQUIREMENTS=apache-airflow-providers-mysql mysql-connector-python pandas matplotlib
+            - AIRFLOW_CONN_MYSQL_CONN=mysql://airflow:airflow@airflow_db:3306/airflow
         volumes:
             - ./dags:/opt/airflow/dags
             - ./csv_files:/opt/airflow/store_files
@@ -75,7 +78,9 @@ services:
             - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=mysql://airflow:airflow@airflow_db/airflow
             - AIRFLOW__CORE__EXECUTOR=LocalExecutor
             - AIRFLOW__CORE__LOAD_EXAMPLES=False
-            - _PIP_ADDITIONAL_REQUIREMENTS=pandas matplotlib
+            - _PIP_ADDITIONAL_REQUIREMENTS=apache-airflow-providers-mysql mysql-connector-python pandas matplotlib
+            - AIRFLOW_CONN_MYSQL_CONN=mysql://airflow:airflow@airflow_db:3306/airflow
+            - AIRFLOW__WEBSERVER__SECRET_KEY=mysecretkey123
         volumes:
             - ./dags:/opt/airflow/dags
             - ./csv_files:/opt/airflow/store_files

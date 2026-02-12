@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import re
 import os
 
 # CSV path and output folder
@@ -13,11 +14,28 @@ print("Loading data...")
 df = pd.read_csv(CSV_PATH)
 print(f"Total records: {len(df)}")
 
+
+def clean_store_location(st_loc):
+    return re.sub(r'[^\w\s]',"",st_loc).strip()
+
+
+def clena_product_id(pd_id):
+    result = re.findall(r'\d+',pd_id)
+    if result:
+        return result[0]
+    return pd_id
+
+
+
 for col in ['MRP', 'CP', 'DISCOUNT', 'SP']:
     df[col] = df[col].replace(r'[\$,]', '', regex=True).astype(float)
 
+df['STORE_LOCATION'] = df['STORE_LOCATION'].map(lambda x: clean_store_location(x))
+df['PRODUCT_ID'] = df['PRODUCT_ID'].map(lambda x:clena_product_id(x))
+
+
 # Sales by category
-print("\n1. Generating chart: Sales by Category...")
+print("\n1.Sales by Category...")
 sales_category = df.groupby('PRODUCT_CATEGORY')['SP'].sum().sort_values(ascending=False)
 plt.figure(figsize=(10, 6))
 sales_category.plot(kind='bar', color='steelblue')
@@ -31,7 +49,7 @@ plt.close()
 print("   Saved: 01_sales_by_category.png")
 
 # Sales by store
-print("\n2. Generating chart: Sales by Store...")
+print("\n2.Sales by Store...")
 sales_store = df.groupby('STORE_LOCATION')['SP'].sum().sort_values(ascending=False)
 plt.figure(figsize=(10, 6))
 sales_store.plot(kind='bar', color='darkorange')
@@ -45,7 +63,7 @@ plt.close()
 print("   Saved: 02_sales_by_store.png")
 
 # Discount distribution
-print("\n3. Generating chart: Discount Distribution...")
+print("\n3.Discount Distribution...")
 plt.figure(figsize=(10, 6))
 plt.hist(df['DISCOUNT'], bins=20, color='green', edgecolor='black', alpha=0.7)
 plt.title('Discount Distribution')
@@ -57,7 +75,7 @@ plt.close()
 print("   Saved: 03_discount_distribution.png")
 
 # Profit margin by category
-print("\n4. Generating chart: Profit Margin by Category...")
+print("\n4.Profit Margin by Category...")
 df['MARGIN'] = df['SP'] - df['CP']
 margin_category = df.groupby('PRODUCT_CATEGORY')['MARGIN'].mean().sort_values(ascending=False)
 plt.figure(figsize=(10, 6))

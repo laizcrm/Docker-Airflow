@@ -1,8 +1,12 @@
 from airflow import DAG
 from datetime import datetime as dt, timedelta
 #from airflow.operators.bash import BashOperator # for quick shell tasks or running existing scripts
-from airflow.operators.python import PythonOperator #for flexbility and complex logic 
+from airflow.operators.python import PythonOperator #for flexbility and complex logic
+from airflow.providers.mysql.operators.mysql import MySqlOperator
 import pandas as pd
+import mysql.connector
+import re
+import runpy
 import os
 
 ##########################################################################################
@@ -23,11 +27,12 @@ default_args = {
 dag = DAG(
     dag_id='validate_csv',
     default_args=default_args,
-    description='Validates CSV file and generates sales charts',
+    description='Validates CSV file, generates sales charts, and loads data into MySQL',
     schedule_interval='@daily',  #timedelta([hour,minutes,days])
     catchup=False,   # true= run all missed executions from @start_date -> today | false = ignore the past dates
     max_active_runs=1,
     tags=['store', 'production'], #helps to identify what DAG is for
+    template_searchpath=['/opt/airflow/sql_files'],
 )
 
 
@@ -71,7 +76,45 @@ def show_columns_and_date():
 
 def generate_graphs():
     """Run analysis script"""
-    exec(open('/opt/airflow/script/analysis_sales.py').read())
+    runpy.run_path('/opt/airflow/script/analysis_sales.py')
+
+
+def load_csv_to_mysql():
+    """Load cleaned CSV data into MySQL store_transactions table"""
+    df = pd.read_csv(csv_path)
+
+    # Clean data (same logic as analysis_sales.py)
+    for col in ['MRP', 'CP', 'DISCOUNT', 'SP']:
+        df[col] = df[col].replace(r'[\$,]', '', regex=True).astype(float)
+
+    df['STORE_LOCATION'] = df['STORE_LOCATION'].map(lambda x: re.sub(r'[^\w\s]', '', x).strip())
+    df['PRODUCT_ID'] = df['PRODUCT_ID'].map(lambda x: re.findall(r'\d+', x)[0] if re.findall(r'\d+', x) else x)
+    df.rename(columns={'Date': 'transaction_date'}, inplace=True)
+
+    # Connect and insert
+    conn = mysql.connector.connect(
+        host='airflow_db',
+        database='airflow',
+        user='airflow',
+        password='airflow'
+    )
+    cursor = conn.cursor()
+
+    # Clear old data before loading
+    cursor.execute('TRUNCATE TABLE store_transactions')
+
+    insert_sql = """INSERT INTO store_transactions
+        (STORE_ID, STORE_LOCATION, PRODUCT_CATEGORY, PRODUCT_ID, MRP, CP, DISCOUNT, SP, transaction_date)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+
+    rows = [tuple(row) for row in df[['STORE_ID', 'STORE_LOCATION', 'PRODUCT_CATEGORY', 'PRODUCT_ID',
+                                       'MRP', 'CP', 'DISCOUNT', 'SP', 'transaction_date']].values]
+    cursor.executemany(insert_sql, rows)
+    conn.commit()
+    print(f'✓ Loaded {len(rows)} rows into store_transactions')
+
+    cursor.close()
+    conn.close()
 
 
 ##########################################################################################
@@ -109,5 +152,32 @@ task_5 = PythonOperator(
     dag=dag,
 )
 
+task_6 = MySqlOperator(
+    task_id='create_mysql_tables',
+    mysql_conn_id='mysql_conn',
+    sql='create_tables.sql',
+    dag=dag,
+)
+
+task_7 = PythonOperator(
+    task_id='load_csv_to_mysql',
+    python_callable=load_csv_to_mysql,
+    dag=dag,
+)
+
+task_8 = MySqlOperator(
+    task_id='insert_sales_by_category',
+    mysql_conn_id='mysql_conn',
+    sql='insert_sales_by_category.sql',
+    dag=dag,
+)
+
+task_9 = MySqlOperator(
+    task_id='insert_sales_by_store',
+    mysql_conn_id='mysql_conn',
+    sql='insert_sales_by_store.sql',
+    dag=dag,
+)
+
 # Pipeline
-task_1 >> task_2 >> task_3 >> task_4 >> task_5
+task_1 >> task_2 >> task_3 >> task_4 >> task_5 >> task_6 >> task_7 >> [task_8, task_9]
