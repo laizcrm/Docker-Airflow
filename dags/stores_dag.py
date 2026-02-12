@@ -3,6 +3,7 @@ from datetime import datetime as dt, timedelta
 #from airflow.operators.bash import BashOperator # for quick shell tasks or running existing scripts
 from airflow.operators.python import PythonOperator #for flexbility and complex logic
 from airflow.providers.mysql.operators.mysql import MySqlOperator
+from airflow.operators.email import EmailOperator
 import pandas as pd
 import mysql.connector
 import re
@@ -16,7 +17,7 @@ default_args = {
     'owner': 'airflow', 
     'depends_on_past': False,
     'start_date': dt(2024, 2, 5),   #the earliest date Airflow will schedule runs
-    'email': ['your-email@example.com'],
+    'email': ['your-email@gmail.com'],
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
@@ -179,5 +180,32 @@ task_9 = MySqlOperator(
     dag=dag,
 )
 
+# Charts path in container
+results_dir = '/opt/airflow/store_files/results'
+
+task_10 = EmailOperator(
+    task_id='send_report_email',
+    to='your-email@gmail.com',
+    subject='Daily Store Sales Report',
+    html_content="""
+        <h2>Store Sales Report</h2>
+        <p>The daily sales pipeline has completed successfully.</p>
+        <p>Please find the analysis charts attached.</p>
+        <ul>
+            <li>Sales by Category</li>
+            <li>Sales by Store Location</li>
+            <li>Discount Distribution</li>
+            <li>Profit Margin by Category</li>
+        </ul>
+    """,
+    files=[
+        f'{results_dir}/01_sales_by_category.png',
+        f'{results_dir}/02_sales_by_store.png',
+        f'{results_dir}/03_discount_distribution.png',
+        f'{results_dir}/04_profit_margin_by_category.png',
+    ],
+    dag=dag,
+)
+
 # Pipeline
-task_1 >> task_2 >> task_3 >> task_4 >> task_5 >> task_6 >> task_7 >> [task_8, task_9]
+task_1 >> task_2 >> task_3 >> task_4 >> task_5 >> task_6 >> task_7 >> [task_8, task_9] >> task_10
