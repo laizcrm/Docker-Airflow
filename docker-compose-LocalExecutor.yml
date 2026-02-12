@@ -1,0 +1,87 @@
+services:
+    mysql:
+        image: mysql:8.0
+        platform: linux/amd64
+        container_name: airflow_db
+        restart: always
+        environment:
+            - MYSQL_ROOT_PASSWORD=root
+            - MYSQL_DATABASE=airflow
+            - MYSQL_USER=airflow
+            - MYSQL_PASSWORD=airflow
+        command: mysqld --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-authentication-plugin=mysql_native_password
+        volumes:
+            - mysql-db-volume:/var/lib/mysql
+        ports:
+            - "3306:3306"
+        healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    airflow-init:
+        image: apache/airflow:2.10.4
+        platform: linux/amd64
+        environment:
+            - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=mysql://airflow:airflow@airflow_db/airflow
+            - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+            - AIRFLOW__CORE__LOAD_EXAMPLES=False
+            - _AIRFLOW_DB_MIGRATE=true
+            - _AIRFLOW_WWW_USER_CREATE=true
+            - _AIRFLOW_WWW_USER_USERNAME=admin
+            - _AIRFLOW_WWW_USER_PASSWORD=admin
+        depends_on:
+            mysql:
+                condition: service_healthy
+        command: version
+        volumes:
+            - ./dags:/opt/airflow/dags
+            - ./csv_files:/opt/airflow/store_files
+            - ./sql_files:/opt/airflow/sql_files
+
+    webserver:
+        image: apache/airflow:2.10.4
+        platform: linux/amd64
+        container_name: airflow_webserver
+        restart: always
+        depends_on:
+            airflow-init:
+                condition: service_completed_successfully
+        environment:
+            - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=mysql://airflow:airflow@airflow_db/airflow
+            - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+            - AIRFLOW__CORE__LOAD_EXAMPLES=False
+            - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
+            - AIRFLOW__WEBSERVER__RBAC=True
+        volumes:
+            - ./dags:/opt/airflow/dags
+            - ./csv_files:/opt/airflow/store_files
+            - ./script:/opt/airflow/script
+            - ./sql_files:/opt/airflow/sql_files
+        ports:
+            - "8080:8080"
+        command: webserver
+
+    scheduler:
+        image: apache/airflow:2.10.4
+        platform: linux/amd64
+        container_name: airflow_scheduler
+        restart: always
+        depends_on:
+            airflow-init:
+                condition: service_completed_successfully
+        environment:
+            - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=mysql://airflow:airflow@airflow_db/airflow
+            - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+            - AIRFLOW__CORE__LOAD_EXAMPLES=False
+            - _PIP_ADDITIONAL_REQUIREMENTS=pandas matplotlib
+        volumes:
+            - ./dags:/opt/airflow/dags
+            - ./csv_files:/opt/airflow/store_files
+            - ./script:/opt/airflow/script
+            - ./sql_files:/opt/airflow/sql_files
+        command: scheduler
+
+volumes:
+    mysql-db-volume:
