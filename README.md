@@ -12,7 +12,7 @@ This project runs a DAG (`validate_csv`) that:
 4. **Displays column headers and date** from the first record
 5. **Generates sales charts** (category sales, store sales, discount distribution, profit margins)
 
-![Airflow DAG](images/pipline.png)
+![Airflow DAG](images/pipeline.png)
 
 ## Project Structure
 
